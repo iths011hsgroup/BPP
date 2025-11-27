@@ -1,24 +1,27 @@
 // app/(tabs)/profile.tsx
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
+  Alert,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
 
 const BACKGROUND = '#020617';
 const TEXT_MAIN = '#E5E7EB';
 const TEXT_MUTED = '#9CA3AF';
 const CARD = '#0F172A';
 const NEGATIVE = '#EF4444';
+const ACCENT = '#4F46E5';
 
 const API_BASE_URL = 'http://192.168.2.57:3000';
 
@@ -26,7 +29,7 @@ type ProfileResponse = {
   id: number;
   email: string;
   username: string | null;
-  avatar_url?: string | null;
+  avatar_url: string | null;
   created_at: string | Date;
 };
 
@@ -37,19 +40,23 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [now, setNow] = useState<Date>(new Date());
 
+  // Avatar UI state
+  const [avatarSheetVisible, setAvatarSheetVisible] = useState(false);
+  const [avatarPreviewVisible, setAvatarPreviewVisible] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const loadProfile = useCallback(async () => {
+  const loadProfile = async () => {
     setLoading(true);
     setProfileError(null);
     try {
       const token = await AsyncStorage.getItem('authToken');
       if (!token) {
         setProfileError('Not authenticated. Please log in again.');
-        setProfile(null);
         setLoading(false);
         return;
       }
@@ -70,18 +77,130 @@ export default function ProfileScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
-  // Refresh profile whenever tab/screen gains focus
-  useFocusEffect(
-    useCallback(() => {
-      loadProfile();
-    }, [loadProfile]),
-  );
+  useEffect(() => {
+    loadProfile();
+  }, []);
 
   const handleLogout = async () => {
     await AsyncStorage.removeItem('authToken');
     router.replace('/');
+  };
+
+  const handleDeleteAvatar = async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) {
+        Alert.alert('Not authenticated', 'Please log in again.');
+        return;
+      }
+
+      const res = await fetch(`${API_BASE_URL}/user/avatar`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.message || 'Failed to delete avatar.');
+      }
+
+      await loadProfile();
+      Alert.alert('Profile picture deleted');
+    } catch (err: any) {
+      Alert.alert(
+        'Error',
+        err?.message || 'Failed to delete profile picture.',
+      );
+    } finally {
+      setAvatarSheetVisible(false);
+    }
+  };
+
+  const handleChangeAvatar = async () => {
+    try {
+      setAvatarSheetVisible(false);
+
+      // 1. Ask for photo library permission
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          'Permission needed',
+          'Please allow access to your photo library to change your picture.',
+        );
+        return;
+      }
+
+      // 2. Let user pick and crop to 1:1
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,    // system crop UI
+        aspect: [1, 1],         // 1:1 square
+        quality: 0.8,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const asset = result.assets?.[0];
+      if (!asset) {
+        return;
+      }
+
+      setUploadingAvatar(true);
+
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) {
+        Alert.alert('Not authenticated', 'Please log in again.');
+        setUploadingAvatar(false);
+        return;
+      }
+
+      const uri = asset.uri;
+      const fileName = uri.split('/').pop() ?? `avatar-${Date.now()}.jpg`;
+      const match = /\.(\w+)$/.exec(fileName);
+      const ext = match ? match[1].toLowerCase() : 'jpg';
+
+      let mimeType = 'image/jpeg';
+      if (ext === 'png') mimeType = 'image/png';
+      else if (ext === 'webp') mimeType = 'image/webp';
+
+      // 3. Build multipart/form-data
+      const formData = new FormData();
+      formData.append('avatar', {
+        uri,
+        name: fileName,
+        type: mimeType,
+      } as any);
+
+      // 4. Upload to backend (which deletes old file + saves new one)
+      const res = await fetch(`${API_BASE_URL}/user/avatar`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`, // DO NOT set Content-Type manually
+        },
+        body: formData,
+      });
+
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.message || 'Failed to upload avatar.');
+      }
+
+      // 5. Refresh profile so new avatar appears
+      await loadProfile();
+      Alert.alert('Profile picture updated');
+    } catch (err: any) {
+      Alert.alert(
+        'Error',
+        err?.message || 'Failed to change profile picture.',
+      );
+    } finally {
+      setUploadingAvatar(false);
+    }
   };
 
   const displayName = (() => {
@@ -89,8 +208,7 @@ export default function ProfileScreen() {
     if (profile.username && profile.username.trim().length > 0) {
       return profile.username.trim();
     }
-    // Placeholder: user#YYYYMMDDHHmmssXXX
-    const createdRaw = profile.created_at;
+    const createdRaw = profile?.created_at;
     const created =
       typeof createdRaw === 'string'
         ? new Date(createdRaw)
@@ -104,7 +222,7 @@ export default function ProfileScreen() {
     const minute = pad2(created.getMinutes());
     const second = pad2(created.getSeconds());
 
-    const suffix = String(profile.id % 1000 || 1).padStart(3, '0');
+    const suffix = String(profile?.id % 1000 || 1).padStart(3, '0');
 
     return `user#${year}${month}${day}${hour}${minute}${second}${suffix}`;
   })();
@@ -114,13 +232,9 @@ export default function ProfileScreen() {
   });
 
   const avatarInitial = displayName.trim()[0]?.toUpperCase() ?? 'U';
-
-  const avatarUrlRelative = profile?.avatar_url ?? null;
-  const avatarUrl =
-    avatarUrlRelative && avatarUrlRelative.startsWith('http')
-      ? avatarUrlRelative
-      : avatarUrlRelative
-      ? `${API_BASE_URL}${avatarUrlRelative}`
+  const avatarUri =
+    profile?.avatar_url && profile.avatar_url.length > 0
+      ? `${API_BASE_URL}${profile.avatar_url}`
       : null;
 
   return (
@@ -134,24 +248,22 @@ export default function ProfileScreen() {
           {/* Header with avatar + name + time */}
           <View style={styles.headerCard}>
             <TouchableOpacity
-              style={styles.avatar}
-              activeOpacity={avatarUrl ? 0.8 : 1}
               onPress={() => {
-                if (avatarUrl) {
-                  router.push('/profile-avatar-view');
-                }
+                if (avatarUri) setAvatarPreviewVisible(true);
               }}
+              activeOpacity={avatarUri ? 0.8 : 1}
             >
-              {avatarUrl ? (
-                <Image
-                  source={{ uri: avatarUrl }}
-                  style={styles.avatarImage}
-                />
-              ) : (
-                <Text style={styles.avatarText}>{avatarInitial}</Text>
-              )}
+              <View style={styles.avatar}>
+                {avatarUri ? (
+                  <Image
+                    source={{ uri: avatarUri }}
+                    style={styles.avatarImage}
+                  />
+                ) : (
+                  <Text style={styles.avatarText}>{avatarInitial}</Text>
+                )}
+              </View>
             </TouchableOpacity>
-
             <View style={styles.headerTextCol}>
               <Text style={styles.helloText}>Hello,</Text>
               <Text style={styles.nameText}>{displayName}</Text>
@@ -159,7 +271,7 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          {/* Error / loading */}
+          {/* Loading / error state */}
           {loading && (
             <View style={styles.center}>
               <ActivityIndicator color="#ffffff" />
@@ -169,17 +281,27 @@ export default function ProfileScreen() {
             <Text style={styles.errorText}>{profileError}</Text>
           )}
 
+          {/* Avatar upload progress */}
+          {uploadingAvatar && (
+            <View style={styles.center}>
+              <ActivityIndicator color={ACCENT} />
+              <Text style={styles.uploadingText}>
+                Updating profile picture…
+              </Text>
+            </View>
+          )}
+
           {/* Menu container */}
           <View style={styles.menuCard}>
-            {/* Change profile picture */}
+            {/* Profile picture menu */}
             <TouchableOpacity
               style={styles.menuRow}
-              onPress={() => router.push('/profile-avatar-edit')}
+              onPress={() => setAvatarSheetVisible(true)}
             >
               <View>
-                <Text style={styles.menuTitle}>Change profile picture</Text>
+                <Text style={styles.menuTitle}>Profile picture</Text>
                 <Text style={styles.menuSubtitle}>
-                  Upload & crop a new avatar
+                  Change or remove your profile picture
                 </Text>
               </View>
               <Text style={styles.menuChevron}>
@@ -189,7 +311,6 @@ export default function ProfileScreen() {
 
             <View style={styles.menuDivider} />
 
-            {/* Change profile (email + username) */}
             <TouchableOpacity
               style={styles.menuRow}
               onPress={() => router.push('/profile-change')}
@@ -207,7 +328,6 @@ export default function ProfileScreen() {
 
             <View style={styles.menuDivider} />
 
-            {/* Change password */}
             <TouchableOpacity
               style={styles.menuRow}
               onPress={() => router.push('/password-change')}
@@ -236,6 +356,81 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Avatar action sheet modal */}
+      <Modal
+        visible={avatarSheetVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAvatarSheetVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.sheetBackdrop}
+          activeOpacity={1}
+          onPress={() => setAvatarSheetVisible(false)}
+        >
+          <View />
+        </TouchableOpacity>
+        <View style={styles.sheetContainer}>
+          <View style={styles.sheetCard}>
+            <Text style={styles.sheetTitle}>Profile picture</Text>
+
+            <TouchableOpacity
+              style={styles.sheetAction}
+              onPress={handleChangeAvatar}
+            >
+              <Text style={styles.sheetActionText}>
+                Change profile picture
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.sheetAction}
+              onPress={handleDeleteAvatar}
+            >
+              <Text style={[styles.sheetActionText, { color: NEGATIVE }]}>
+                Delete profile picture
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.sheetAction, styles.sheetCancel]}
+              onPress={() => setAvatarSheetVisible(false)}
+            >
+              <Text style={styles.sheetCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Full-size avatar preview modal */}
+      <Modal
+        visible={avatarPreviewVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAvatarPreviewVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.previewBackdrop}
+          activeOpacity={1}
+          onPress={() => setAvatarPreviewVisible(false)}
+        >
+          <View />
+        </TouchableOpacity>
+        <View style={styles.previewContainer}>
+          <View style={styles.previewCard}>
+            {avatarUri ? (
+              <Image
+                source={{ uri: avatarUri }}
+                style={styles.previewImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={styles.previewPlaceholder}>{avatarInitial}</Text>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -274,12 +469,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
-    overflow: 'hidden',
+    overflow: 'hidden', // circular mask
   },
   avatarImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 26,
   },
   avatarText: {
     color: TEXT_MAIN,
@@ -312,6 +506,11 @@ const styles = StyleSheet.create({
     color: NEGATIVE,
     fontSize: 12,
     marginBottom: 8,
+  },
+  uploadingText: {
+    color: TEXT_MUTED,
+    fontSize: 12,
+    marginTop: 4,
   },
   menuCard: {
     backgroundColor: CARD,
@@ -358,5 +557,80 @@ const styles = StyleSheet.create({
     color: NEGATIVE,
     fontSize: 14,
     fontWeight: '600',
+  },
+  // Action sheet
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  sheetContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    padding: 16,
+  },
+  sheetCard: {
+    backgroundColor: CARD,
+    borderRadius: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  sheetTitle: {
+    color: TEXT_MAIN,
+    fontSize: 14,
+    fontWeight: '600',
+    paddingVertical: 8,
+    textAlign: 'center',
+  },
+  sheetAction: {
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  sheetActionText: {
+    color: TEXT_MAIN,
+    fontSize: 14,
+  },
+  sheetCancel: {
+    borderTopWidth: 1,
+    borderTopColor: '#111827',
+    marginTop: 6,
+  },
+  sheetCancelText: {
+    color: TEXT_MUTED,
+    fontSize: 14,
+  },
+  // Avatar preview
+  previewBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+  },
+  previewContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  previewCard: {
+    width: 260,
+    height: 260,
+    borderRadius: 16,
+    backgroundColor: '#020617',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  previewPlaceholder: {
+    color: TEXT_MAIN,
+    fontSize: 48,
+    fontWeight: '700',
   },
 });

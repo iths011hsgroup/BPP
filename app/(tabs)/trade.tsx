@@ -3,8 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   RefreshControl,
   ScrollView,
@@ -49,6 +49,8 @@ type CoinOption = {
   name: string;
   priceIdr: number;
 };
+
+type DialogVariant = 'info' | 'success' | 'error';
 
 const formatIDR = (value: number) => {
   try {
@@ -110,6 +112,23 @@ export default function TradeScreen() {
   const [availableCoins, setAvailableCoins] = useState<CoinOption[]>([]);
 
   const [refreshing, setRefreshing] = useState(false);
+
+  // Themed modal dialog state
+  const [dialogVisible, setDialogVisible] = useState(false);
+  const [dialogTitle, setDialogTitle] = useState('');
+  const [dialogMessage, setDialogMessage] = useState('');
+  const [dialogVariant, setDialogVariant] = useState<DialogVariant>('info');
+
+  const showDialog = (
+    title: string,
+    message: string,
+    variant: DialogVariant = 'info',
+  ) => {
+    setDialogTitle(title);
+    setDialogMessage(message);
+    setDialogVariant(variant);
+    setDialogVisible(true);
+  };
 
   const idrBalance =
     balances.find((b) => b.currency === 'IDR')?.balance ?? 0;
@@ -225,9 +244,10 @@ export default function TradeScreen() {
       const spend = Number(cleaned);
 
       if (!s || !spend || spend <= 0) {
-        Alert.alert(
+        showDialog(
           'Invalid input',
           'Select a symbol and enter amount in IDR to spend.',
+          'error',
         );
         return;
       }
@@ -238,9 +258,10 @@ export default function TradeScreen() {
       const amount = Number(cleaned);
 
       if (!s || !amount || amount <= 0) {
-        Alert.alert(
+        showDialog(
           'Invalid input',
           'Select a symbol and enter amount of coin to buy.',
+          'error',
         );
         return;
       }
@@ -252,7 +273,7 @@ export default function TradeScreen() {
     try {
       const token = await AsyncStorage.getItem('authToken');
       if (!token) {
-        Alert.alert('Not authenticated', 'Please log in again.');
+        showDialog('Not authenticated', 'Please log in again.', 'error');
         setTradeLoading(false);
         return;
       }
@@ -272,11 +293,12 @@ export default function TradeScreen() {
         throw new Error(json?.message || 'Failed to buy.');
       }
 
-      Alert.alert(
+      showDialog(
         'Trade executed',
         `Bought ${json.amount_coin.toFixed(8)} ${json.symbol} at ${formatIDR(
           json.price_idr,
         )}`,
+        'success',
       );
 
       // Clear both inputs
@@ -284,7 +306,7 @@ export default function TradeScreen() {
       setBuyAmountCoin('');
       await loadAll();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Something went wrong.');
+      showDialog('Error', err?.message || 'Something went wrong.', 'error');
     } finally {
       setTradeLoading(false);
     }
@@ -298,9 +320,10 @@ export default function TradeScreen() {
     const amount = Number(cleaned);
 
     if (!s || !amount || amount <= 0) {
-      Alert.alert(
+      showDialog(
         'Invalid input',
         'Select a symbol and enter amount of coin to sell.',
+        'error',
       );
       return;
     }
@@ -309,7 +332,7 @@ export default function TradeScreen() {
     try {
       const token = await AsyncStorage.getItem('authToken');
       if (!token) {
-        Alert.alert('Not authenticated', 'Please log in again.');
+        showDialog('Not authenticated', 'Please log in again.', 'error');
         setTradeLoading(false);
         return;
       }
@@ -328,16 +351,17 @@ export default function TradeScreen() {
         throw new Error(json?.message || 'Failed to sell.');
       }
 
-      Alert.alert(
+      showDialog(
         'Trade executed',
         `Sold ${json.amount_coin.toFixed(8)} ${json.symbol} at ${formatIDR(
           json.price_idr,
         )}`,
+        'success',
       );
       setSellAmount('');
       await loadAll();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Something went wrong.');
+      showDialog('Error', err?.message || 'Something went wrong.', 'error');
     } finally {
       setTradeLoading(false);
     }
@@ -586,6 +610,32 @@ export default function TradeScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* Themed modal dialog */}
+      <Modal
+        transparent
+        animationType="fade"
+        visible={dialogVisible}
+        onRequestClose={() => setDialogVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{dialogTitle}</Text>
+            <Text style={styles.modalMessage}>{dialogMessage}</Text>
+            <TouchableOpacity
+              style={[
+                styles.modalButton,
+                dialogVariant === 'error'
+                  ? styles.modalButtonError
+                  : styles.modalButtonPrimary,
+              ]}
+              onPress={() => setDialogVisible(false)}
+            >
+              <Text style={styles.modalButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -779,5 +829,48 @@ const styles = StyleSheet.create({
   },
   modeButtonTextActive: {
     color: TEXT_MAIN,
+  },
+  // Modal styles
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: '#00000088',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCard: {
+    width: '80%',
+    maxWidth: 360,
+    backgroundColor: CARD,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+  },
+  modalTitle: {
+    color: TEXT_MAIN,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  modalMessage: {
+    color: TEXT_MUTED,
+    fontSize: 13,
+    marginBottom: 14,
+  },
+  modalButton: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  modalButtonPrimary: {
+    backgroundColor: '#4F46E5',
+  },
+  modalButtonError: {
+    backgroundColor: NEGATIVE,
+  },
+  modalButtonText: {
+    color: '#F9FAFB',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

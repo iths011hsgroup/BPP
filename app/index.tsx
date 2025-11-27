@@ -77,12 +77,15 @@ export default function AuthScreen() {
     }
   };
 
-
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
       <Text style={styles.appTitle}>BPP</Text>
+
+      {/* New full name line */}
+      <Text style={styles.appFullName}>Broke Person&apos;s Platform</Text>
+
       <Text style={styles.subtitle}>
         {isRegister ? 'Create your account' : 'Welcome back'}
       </Text>
@@ -92,7 +95,9 @@ export default function AuthScreen() {
           {isRegister ? 'Email' : 'Email or username'}
         </Text>
         <TextInput
-          placeholder={isRegister ? 'you@example.com' : 'you@example.com or username'}
+          placeholder={
+            isRegister ? 'you@example.com' : 'you@example.com or username'
+          }
           placeholderTextColor="#8A8FA6"
           value={email}
           onChangeText={setEmail}
@@ -129,7 +134,6 @@ export default function AuthScreen() {
             />
           </>
         )}
-
 
         <TouchableOpacity
           style={[styles.primaryButton, loading && { opacity: 0.7 }]}
@@ -177,10 +181,6 @@ export default function AuthScreen() {
           </Text>
         )}
       </View>
-
-      <Text style={styles.disclaimer}>
-        Demo UI only. Do not use real banking credentials.
-      </Text>
     </View>
   );
 }
@@ -197,8 +197,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: TEXT_MAIN,
   },
+  // New style: smaller than BPP, bigger than subtitle, slightly less bold
+  appFullName: {
+    marginTop: 4,
+    fontSize: 20,
+    fontWeight: '600',
+    color: TEXT_MAIN,
+  },
   subtitle: {
-    marginTop: 8,
+    marginTop: 6,
     fontSize: 16,
     color: TEXT_MUTED,
   },
@@ -251,11 +258,5 @@ const styles = StyleSheet.create({
   registerLink: {
     color: ACCENT,
     fontWeight: '600',
-  },
-  disclaimer: {
-    marginTop: 16,
-    fontSize: 11,
-    color: TEXT_MUTED,
-    textAlign: 'center',
   },
 });

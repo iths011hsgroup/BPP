@@ -2,8 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   RefreshControl,
   ScrollView,
@@ -40,6 +40,8 @@ type BalanceRow = {
 
 type BalanceMode = 'DEPOSIT' | 'WITHDRAW';
 
+type DialogVariant = 'info' | 'success' | 'error';
+
 const formatIDR = (value: number) => {
   try {
     return new Intl.NumberFormat('id-ID', {
@@ -71,6 +73,23 @@ export default function BalanceScreen() {
   const [transactions, setTransactions] = useState<BalanceTransaction[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Themed modal dialog state
+  const [dialogVisible, setDialogVisible] = useState(false);
+  const [dialogTitle, setDialogTitle] = useState('');
+  const [dialogMessage, setDialogMessage] = useState('');
+  const [dialogVariant, setDialogVariant] = useState<DialogVariant>('info');
+
+  const showDialog = (
+    title: string,
+    message: string,
+    variant: DialogVariant = 'info',
+  ) => {
+    setDialogTitle(title);
+    setDialogMessage(message);
+    setDialogVariant(variant);
+    setDialogVisible(true);
+  };
 
   const loadBalances = async () => {
     try {
@@ -141,7 +160,11 @@ export default function BalanceScreen() {
     const amount = Number(cleaned);
 
     if (!amount || amount <= 0) {
-      Alert.alert('Invalid input', 'Enter a positive deposit amount in IDR.');
+      showDialog(
+        'Invalid input',
+        'Enter a positive deposit amount in IDR.',
+        'error',
+      );
       return;
     }
 
@@ -149,7 +172,7 @@ export default function BalanceScreen() {
       setSubmitting(true);
       const token = await AsyncStorage.getItem('authToken');
       if (!token) {
-        Alert.alert('Not authenticated', 'Please log in again.');
+        showDialog('Not authenticated', 'Please log in again.', 'error');
         setSubmitting(false);
         return;
       }
@@ -169,12 +192,13 @@ export default function BalanceScreen() {
 
       setDepositAmount('');
       await loadAll();
-      Alert.alert(
+      showDialog(
         'Deposit successful',
-        `New balance: ${formatIDR(Number(json.new_balance_idr || 0))}`
+        `New balance: ${formatIDR(Number(json.new_balance_idr || 0))}`,
+        'success',
       );
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to deposit.');
+      showDialog('Error', err?.message || 'Failed to deposit.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -185,7 +209,11 @@ export default function BalanceScreen() {
     const amount = Number(cleaned);
 
     if (!amount || amount <= 0) {
-      Alert.alert('Invalid input', 'Enter a positive withdrawal amount in IDR.');
+      showDialog(
+        'Invalid input',
+        'Enter a positive withdrawal amount in IDR.',
+        'error',
+      );
       return;
     }
 
@@ -193,7 +221,7 @@ export default function BalanceScreen() {
       setSubmitting(true);
       const token = await AsyncStorage.getItem('authToken');
       if (!token) {
-        Alert.alert('Not authenticated', 'Please log in again.');
+        showDialog('Not authenticated', 'Please log in again.', 'error');
         setSubmitting(false);
         return;
       }
@@ -213,12 +241,13 @@ export default function BalanceScreen() {
 
       setWithdrawAmount('');
       await loadAll();
-      Alert.alert(
+      showDialog(
         'Withdrawal successful',
-        `New balance: ${formatIDR(Number(json.new_balance_idr || 0))}`
+        `New balance: ${formatIDR(Number(json.new_balance_idr || 0))}`,
+        'success',
       );
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to withdraw.');
+      showDialog('Error', err?.message || 'Failed to withdraw.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -375,6 +404,32 @@ export default function BalanceScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Themed modal dialog */}
+      <Modal
+        transparent
+        animationType="fade"
+        visible={dialogVisible}
+        onRequestClose={() => setDialogVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{dialogTitle}</Text>
+            <Text style={styles.modalMessage}>{dialogMessage}</Text>
+            <TouchableOpacity
+              style={[
+                styles.modalButton,
+                dialogVariant === 'error'
+                  ? styles.modalButtonError
+                  : styles.modalButtonPrimary,
+              ]}
+              onPress={() => setDialogVisible(false)}
+            >
+              <Text style={styles.modalButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -561,5 +616,48 @@ const styles = StyleSheet.create({
     marginTop: 2,
     flexShrink: 1,
     textAlign: 'right',
+  },
+  // Modal styles
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: '#00000088',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCard: {
+    width: '80%',
+    maxWidth: 360,
+    backgroundColor: CARD,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+  },
+  modalTitle: {
+    color: TEXT_MAIN,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  modalMessage: {
+    color: TEXT_MUTED,
+    fontSize: 13,
+    marginBottom: 14,
+  },
+  modalButton: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  modalButtonPrimary: {
+    backgroundColor: '#4F46E5',
+  },
+  modalButtonError: {
+    backgroundColor: NEGATIVE,
+  },
+  modalButtonText: {
+    color: '#F9FAFB',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

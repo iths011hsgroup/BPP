@@ -1,9 +1,9 @@
-// app/(%28)tabs)/_layout.tsx
+// app/(tabs)/_layout.tsx
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { Ionicons } from '@expo/vector-icons';
 
 import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -14,25 +14,62 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarInactiveTintColor:
+          Colors[colorScheme ?? 'light'].tabIconDefault,
         headerShown: false,
         tabBarButton: HapticTab,
+        tabBarStyle: {
+          backgroundColor: '#020617', // match BACKGROUND
+          borderTopColor: '#111827',
+        },
       }}
     >
       <Tabs.Screen
-        name="home" // <- matches app/(tabs)/home.tsx
+        name="home"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="house.fill" color={color} />
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home" size={size ?? 24} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="trade"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="paperplane.fill" color={color} />
+          title: 'Trade',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons
+              name="swap-horizontal"
+              size={size ?? 24}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="portfolio"
+        options={{
+          title: 'Portfolio',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="pie-chart" size={size ?? 24} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="balance"
+        options={{
+          title: 'Balance',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="wallet" size={size ?? 24} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person" size={size ?? 24} color={color} />
           ),
         }}
       />

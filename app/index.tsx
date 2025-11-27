@@ -2,25 +2,24 @@
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const PRIMARY = '#1E3A8A'; // deep blue = professional
-const BACKGROUND = '#020617'; // near-black blue
+const PRIMARY = '#1E3A8A';
+const BACKGROUND = '#020617';
 const CARD = '#0F172A';
 const TEXT_MAIN = '#E5E7EB';
 const TEXT_MUTED = '#9CA3AF';
 const ACCENT = '#4F46E5';
 
-// IMPORTANT: you're using your PC's LAN IP here
-// Make sure your device/emulator can reach 192.168.2.57 on port 3000
 const API_BASE_URL = 'http://192.168.2.57:3000';
 
 export default function AuthScreen() {
@@ -48,10 +47,14 @@ export default function AuthScreen() {
     try {
       const endpoint = isRegister ? '/auth/register' : '/auth/login';
 
+      const payload = isRegister
+        ? { email, password }
+        : { identifier: email, password };
+
       const res = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json().catch(() => null);
@@ -62,26 +65,18 @@ export default function AuthScreen() {
         throw new Error(message);
       }
 
-      // data = { user: { id, email }, token }
-      Alert.alert(
-        'Success',
-        isRegister ? 'Account created. Logging you in...' : 'Logged in!',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              // later: store data.token securely (SecureStore)
-              router.replace('/home');
-            },
-          },
-        ],
-      );
+      if (data?.token) {
+        await AsyncStorage.setItem('authToken', data.token);
+      }
+
+      router.replace('/home');
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Something went wrong.');
     } finally {
       setLoading(false);
     }
   };
+
 
   return (
     <View style={styles.container}>
@@ -92,16 +87,18 @@ export default function AuthScreen() {
         {isRegister ? 'Create your account' : 'Welcome back'}
       </Text>
 
-      {/* Form */}
       <View style={styles.form}>
-        <Text style={styles.label}>Email</Text>
+        <Text style={styles.label}>
+          {isRegister ? 'Email' : 'Email or username'}
+        </Text>
         <TextInput
-          placeholder="you@example.com"
+          placeholder={isRegister ? 'you@example.com' : 'you@example.com or username'}
           placeholderTextColor="#8A8FA6"
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
+          autoCorrect={false}
           style={styles.input}
         />
 
@@ -112,6 +109,8 @@ export default function AuthScreen() {
           value={password}
           onChangeText={setPassword}
           secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
           style={styles.input}
         />
 
@@ -124,10 +123,13 @@ export default function AuthScreen() {
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
               style={styles.input}
             />
           </>
         )}
+
 
         <TouchableOpacity
           style={[styles.primaryButton, loading && { opacity: 0.7 }]}
@@ -143,7 +145,6 @@ export default function AuthScreen() {
           )}
         </TouchableOpacity>
 
-        {/* Login / Register helper text */}
         {!isRegister ? (
           <>
             <TouchableOpacity

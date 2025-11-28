@@ -50,7 +50,7 @@
       "eas": {
         "projectId": "a31628bb-43bb-412c-b5df-87961d286511"
       },
-      "apiBaseUrl": "http://bpp-server-production.up.railway.app"
+      "apiBaseUrl": "https://bpp-server-production.up.railway.app"
     }
   }
 }

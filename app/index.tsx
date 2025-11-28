@@ -20,7 +20,8 @@ const TEXT_MAIN = '#E5E7EB';
 const TEXT_MUTED = '#9CA3AF';
 const ACCENT = '#4F46E5';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://192.168.2.57:3000';
+// const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://bpp-server-production.up.railway.app/';
+import { API_BASE_URL } from '@/constants/api';
 
 export default function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login');

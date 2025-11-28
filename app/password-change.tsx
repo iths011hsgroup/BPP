@@ -21,7 +21,9 @@ const CARD = '#0F172A';
 const NEGATIVE = '#EF4444';
 const ACCENT = '#4F46E5';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://192.168.2.57:3000';
+// const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://bpp-server-production.up.railway.app/';
+import { API_BASE_URL } from '@/constants/api';
+
 export const options = {
   title: 'Change password',
 };

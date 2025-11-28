@@ -24,7 +24,7 @@ const POSITIVE = '#22C55E';
 const NEGATIVE = '#EF4444';
 
 // Same backend base URL as in app/index.tsx
-const API_BASE_URL = 'http://192.168.2.57:3000';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://192.168.2.57:3000';
 
 type Coin = {
   id?: number;
